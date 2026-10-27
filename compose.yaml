@@ -19,7 +19,7 @@ services:
       - SETGID
       - KILL
     environment:
-      ALLOWED_CLIENT_CIDRS: ${ALLOWED_CLIENT_CIDRS:?Set ALLOWED_CLIENT_CIDRS in .env}
+      ALLOWED_CLIENT_CIDRS: ${ALLOWED_CLIENT_CIDRS:-auto}
       POLL_INTERVAL: ${POLL_INTERVAL:-5}
       RELOAD_TIMEOUT: ${RELOAD_TIMEOUT:-15}
     volumes:

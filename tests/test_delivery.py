@@ -25,6 +25,7 @@ class DeliveryTests(unittest.TestCase):
             script = path / "compose.sh"
             script.write_text(
                 'case "$1" in\n'
+                'config) printf "ALLOWED_CLIENT_CIDRS=127.0.0.1/32\\n" ;;\n'
                 'build) sleep 0.2; touch built ;;\n'
                 'run) test -e built || exit 3; touch checked ;;\n'
                 'up) test -e checked || exit 4; touch started ;;\n'
@@ -59,6 +60,7 @@ class DeliveryTests(unittest.TestCase):
             with tarfile.open(path / "dist/squid-proxy-n8n.tar.gz") as archive:
                 names = archive.getnames()
                 self.assertIn("config/proxy.example.txt", names)
+                self.assertIn("compose-client.sh", names)
                 self.assertNotIn(".env", names)
                 self.assertNotIn("config/proxy.txt", names)
                 self.assertFalse(any("__pycache__" in name or ".git/" in name for name in names))

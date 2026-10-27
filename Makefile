@@ -3,6 +3,7 @@ COMPOSE ?= $(ENGINE) compose
 TEST_IMAGE ?= squid-proxy-n8n-test:local
 BASE_IMAGE ?= alpine:3.23
 MAKEFILE_PATH := $(abspath $(lastword $(MAKEFILE_LIST)))
+CLIENT_COMPOSE = COMPOSE_COMMAND="$(COMPOSE)" ENGINE_COMMAND="$(ENGINE)" sh "$(dir $(MAKEFILE_PATH))compose-client.sh"
 
 .DEFAULT_GOAL := help
 .PHONY: help init build up deploy down logs status health check test integration package
@@ -20,10 +21,10 @@ build:
 	$(COMPOSE) build --build-arg BASE_IMAGE=$(BASE_IMAGE) squid
 
 check:
-	$(COMPOSE) run --rm --no-deps squid python3 -m proxy_manager --check
+	$(CLIENT_COMPOSE) run --rm --no-deps squid python3 -m proxy_manager --check
 
 up:
-	$(COMPOSE) up -d --wait squid
+	$(CLIENT_COMPOSE) up -d --wait squid
 
 deploy:
 	$(MAKE) -f "$(MAKEFILE_PATH)" build
@@ -53,4 +54,4 @@ integration:
 
 package:
 	@mkdir -p dist
-	tar --exclude='__pycache__' --exclude='*.pyc' -czf dist/squid-proxy-n8n.tar.gz Dockerfile compose.yaml Makefile README.md .env.example .gitignore .dockerignore config/proxy.example.txt proxy_manager tests docs
+	tar --exclude='__pycache__' --exclude='*.pyc' -czf dist/squid-proxy-n8n.tar.gz Dockerfile compose.yaml compose-client.sh Makefile README.md .env.example .gitignore .dockerignore config/proxy.example.txt proxy_manager tests docs

@@ -208,6 +208,7 @@ class Runtime:
             "heartbeat": time.time(),
             "last_update_error": error,
             "listen_port": self.settings.listen_port,
+            "allowed_client_cidrs": list(self.settings.allowed_cidrs),
             "socks_bridge_count": len(self.active.pool.bridges) if self.active else 0,
             "adapters_healthy": self.active.pool.healthy() if self.active else False,
         }
