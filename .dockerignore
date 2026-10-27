@@ -1,0 +1,8 @@
+.git
+.env
+config/*
+!config/proxy.example.txt
+dist
+__pycache__
+**/__pycache__
+.superpowers

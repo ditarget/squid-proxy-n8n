@@ -1,0 +1,51 @@
+name: ${COMPOSE_PROJECT_NAME:?Set COMPOSE_PROJECT_NAME in .env}
+
+services:
+  squid:
+    build:
+      context: .
+      target: runtime
+    restart: unless-stopped
+    init: true
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - SETUID
+      - SETGID
+      - KILL
+    environment:
+      ALLOWED_CLIENT_CIDRS: ${ALLOWED_CLIENT_CIDRS:?Set ALLOWED_CLIENT_CIDRS in .env}
+      POLL_INTERVAL: ${POLL_INTERVAL:-5}
+      RELOAD_TIMEOUT: ${RELOAD_TIMEOUT:-15}
+    volumes:
+      - ./config:/config:ro
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=32m
+      - /run/telegram-proxy:rw,noexec,nosuid,size=32m
+    networks:
+      client:
+        aliases:
+          - ${PROXY_ALIAS:?Set PROXY_ALIAS in .env}
+    labels:
+      - traefik.enable=false
+    healthcheck:
+      test: ["CMD", "python3", "-m", "proxy_manager.health"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 30s
+    stop_grace_period: 10s
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  client:
+    external: true
+    name: ${CLIENT_NETWORK:?Set CLIENT_NETWORK in .env}

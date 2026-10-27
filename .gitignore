@@ -1,0 +1,7 @@
+.env
+config/*
+!config/proxy.example.txt
+__pycache__/
+*.py[cod]
+dist/
+.superpowers/
