@@ -11,10 +11,11 @@ import subprocess
 import tempfile
 import threading
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from .config import render_config
+from .bridge import BridgePool
 from .inputs import InputError, parse_proxies
 
 
@@ -31,6 +32,7 @@ class Candidate:
     path: Path
     digest: str
     count: int
+    pool: BridgePool = field(repr=False)
 
 
 def emit(event, **fields):
@@ -74,6 +76,7 @@ class Runtime:
         self.log_thread = None
         self.output = None
         self.applied_at = None
+        self.pools = []
 
     def stage(self, raw):
         if len(raw) > 1048576:
@@ -86,8 +89,10 @@ class Runtime:
         directory = Path(tempfile.mkdtemp(prefix="version-", dir=self.root))
         directory.chmod(0o750)
         path = directory / "squid.conf"
+        pool = None
         try:
-            path.write_text(render_config(self.settings, peers, digest), encoding="utf-8")
+            pool = BridgePool(peers)
+            path.write_text(render_config(self.settings, pool.peers, digest), encoding="utf-8")
             path.chmod(0o640)
             if os.geteuid() == 0:
                 os.chown(directory, -1, self.group)
@@ -98,10 +103,25 @@ class Runtime:
             )
             if result.returncode:
                 raise RuntimeErrorSafe("squid_config_rejected")
-            return Candidate(path, digest, len(peers))
+            self.pools.append(pool)
+            return Candidate(path, digest, len(peers), pool)
         except BaseException:
+            if pool:
+                pool.close()
             shutil.rmtree(directory)
             raise
+
+    def discard(self, candidate):
+        candidate.pool.close()
+        if candidate.pool in self.pools:
+            self.pools.remove(candidate.pool)
+        shutil.rmtree(candidate.path.parent)
+
+    def reap_pools(self):
+        for pool in tuple(self.pools):
+            if (self.active is None or pool is not self.active.pool) and pool.idle():
+                pool.close()
+                self.pools.remove(pool)
 
     def select(self, candidate):
         temporary = self.root / ".active-next"
@@ -160,6 +180,7 @@ class Runtime:
         if self.confirmed(candidate):
             self.active = candidate
             self.applied_at = time.time()
+            previous.pool.retire()
             self.write_status()
             self.cleanup({candidate.path.parent, previous.path.parent})
             return
@@ -168,7 +189,7 @@ class Runtime:
             self.process.send_signal(signal.SIGHUP)
         if not self.confirmed(previous):
             raise RollbackError("rollback_not_confirmed")
-        shutil.rmtree(candidate.path.parent)
+        self.discard(candidate)
         raise RuntimeErrorSafe("reload_not_confirmed")
 
     def cleanup(self, keep):
@@ -177,6 +198,7 @@ class Runtime:
                 shutil.rmtree(directory)
 
     def write_status(self, error=None):
+        self.reap_pools()
         if error is not None and not re.fullmatch("[a-z0-9_]{1,80}", error):
             error = "internal_error"
         status = {
@@ -186,6 +208,8 @@ class Runtime:
             "heartbeat": time.time(),
             "last_update_error": error,
             "listen_port": self.settings.listen_port,
+            "socks_bridge_count": len(self.active.pool.bridges) if self.active else 0,
+            "adapters_healthy": self.active.pool.healthy() if self.active else False,
         }
         path = self.root / ".status-next"
         path.write_text(json.dumps(status), encoding="utf-8")
@@ -194,6 +218,8 @@ class Runtime:
 
     def stop(self):
         if self.process is None:
+            for pool in self.pools:
+                pool.close()
             return
         try:
             os.killpg(self.process.pid, signal.SIGTERM)
@@ -208,3 +234,5 @@ class Runtime:
             self.log_thread.join(timeout=1)
         if self.output:
             self.output.close()
+        for pool in self.pools:
+            pool.close()

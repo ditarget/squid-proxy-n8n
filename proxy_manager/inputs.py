@@ -15,6 +15,7 @@ class Peer:
     tls: bool
     username: str | None = field(default=None, repr=False)
     password: str | None = field(default=None, repr=False)
+    socks: bool = False
 
 
 def normalize_host(value: str) -> str:
@@ -51,12 +52,14 @@ def parse_proxies(text: str) -> tuple[Peer, ...]:
             if any(char.isspace() or ord(char) < 32 for char in line) or "\\" in line:
                 raise ValueError("invalid_url")
             parsed = urlsplit(line)
-            if parsed.scheme not in ("http", "https"):
+            if parsed.scheme not in ("http", "https", "socks5", "socks5h"):
                 raise ValueError("unsupported_scheme")
             if parsed.path not in ("", "/") or parsed.query or parsed.fragment:
                 raise ValueError("invalid_url")
             host = normalize_host(parsed.hostname or "")
-            port = parsed.port if parsed.port is not None else (443 if parsed.scheme == "https" else 80)
+            socks = parsed.scheme in ("socks5", "socks5h")
+            default_port = 1080 if socks else (443 if parsed.scheme == "https" else 80)
+            port = parsed.port if parsed.port is not None else default_port
             if not 1 <= port <= 65535:
                 raise ValueError("invalid_port")
             username = password = None
@@ -64,9 +67,11 @@ def parse_proxies(text: str) -> tuple[Peer, ...]:
                 if parsed.password is None:
                     raise ValueError("missing_password")
                 username, password = credential(parsed.username), credential(parsed.password)
-                if not username or ":" in username:
+                if not username or (not socks and ":" in username):
                     raise ValueError("invalid_username")
-            peer = Peer(host, port, parsed.scheme == "https", username, password)
+                if socks and not all(1 <= len(value.encode()) <= 255 for value in (username, password)):
+                    raise ValueError("invalid_socks_credentials")
+            peer = Peer(host, port, parsed.scheme == "https", username, password, socks)
             if peer not in seen:
                 seen.add(peer)
                 peers.append(peer)

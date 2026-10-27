@@ -17,7 +17,7 @@ class InputTests(unittest.TestCase):
 
     def test_invalid_input_does_not_expose_secrets(self):
         urls = [
-            "", "# empty", "socks5://u:SECRET@host:1080",
+            "", "# empty", "socks4://u:SECRET@host:1080",
             "http://u:SECRET@host:0", "http://u:SECRET@host:65536",
             "http://u:SECRET@host/path", "http://u:SECRET@host?x=1",
             "http://u:SECRET@host#fragment", "http://u:SECRET@host name",
@@ -40,6 +40,19 @@ class InputTests(unittest.TestCase):
         peer = parse_proxies("http://private-user:private-pass@host:8080")[0]
         self.assertNotIn("private-user", repr(peer))
         self.assertNotIn("private-pass", repr(peer))
+
+    def test_socks5_and_socks5h_accept_auth_and_remote_dns(self):
+        peers = parse_proxies("socks5://user:p%40ss@host\nsocks5h://host:1081")
+        self.assertEqual(peers[0].port, 1080)
+        self.assertEqual(peers[0].password, "p@ss")
+        self.assertTrue(peers[0].socks)
+        self.assertFalse(peers[0].tls)
+        self.assertTrue(peers[1].socks)
+
+    def test_socks_credentials_obey_byte_limits(self):
+        for url in ("socks5://u:@host", "socks5://u:" + "x" * 256 + "@host"):
+            with self.assertRaises(InputError):
+                parse_proxies(url)
 
 
 class SettingsTests(unittest.TestCase):

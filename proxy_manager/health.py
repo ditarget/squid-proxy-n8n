@@ -12,7 +12,7 @@ def main():
         max_age = max(30, settings.poll_interval * 3 + settings.reload_timeout * 2)
         if time.time() - status["heartbeat"] > max_age:
             return 1
-        if not status["active_digest"]:
+        if not status["active_digest"] or not status["adapters_healthy"]:
             return 1
         return int(active_version(settings.listen_port) != status["active_digest"])
     except (OSError, ValueError, KeyError, TypeError):

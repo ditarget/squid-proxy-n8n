@@ -1,3 +1,4 @@
 http://user1:password1@proxy1.example.net:8080
 http://user2:password2@proxy2.example.net:3128
 https://proxy3.example.net:443
+socks5://user4:password4@proxy4.example.net:1080

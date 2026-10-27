@@ -1,6 +1,5 @@
 import hashlib
 import signal
-import shutil
 import subprocess
 import threading
 
@@ -26,7 +25,7 @@ def main(check=False):
         candidate = runtime.stage(raw)
         if check:
             emit("config_valid", proxy_count=candidate.count)
-            shutil.rmtree(candidate.path.parent)
+            runtime.discard(candidate)
             return 0
         runtime.start(candidate)
         emit("config_applied", proxy_count=candidate.count, digest=candidate.digest[:12])
@@ -35,6 +34,8 @@ def main(check=False):
         while not stop.wait(settings.poll_interval):
             if runtime.process.poll() is not None:
                 raise RuntimeErrorSafe("squid_exited")
+            if not runtime.active.pool.healthy():
+                raise RuntimeErrorSafe("socks_adapter_exited")
             try:
                 raw = read_input(settings.input_path)
                 digest = hashlib.sha256(raw).hexdigest()

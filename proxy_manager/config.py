@@ -6,7 +6,7 @@ from .settings import Settings
 
 
 def render_config(settings: Settings, peers: tuple[Peer, ...], digest: str) -> str:
-    if not re.fullmatch("[a-f0-9]{64}", digest) or not peers:
+    if not re.fullmatch("[a-f0-9]{64}", digest) or not peers or any(peer.socks for peer in peers):
         raise ValueError("invalid_config")
     lines = [
         f"http_port {settings.listen_port}",
